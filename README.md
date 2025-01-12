@@ -1,5 +1,17 @@
 # GNN Classification 
 
+The purpose of this project is to build an AIM model for graph classification. 
+
+# Dataset 
+
+The raw dataset contains the following data 
+
+| **Feature**           | **Column name** | **Data type** |
+|------------------------|---------------------------|-------------------------------------|
+| Smile representation  | smiles  | string | 
+| Activity | activity | string | 
+| HIV_active | HIV_active | int |
+
 ## Node Features
 
 Each atom in a molecule is represented by a set of features:
