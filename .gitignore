@@ -1,2 +1,6 @@
 data/processed/*
 wandb/
+*.pt
+*.pth
+
+
