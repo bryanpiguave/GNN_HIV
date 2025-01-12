@@ -1,5 +1,5 @@
 import pandas as pd 
-import concurrent
+import os
 # Add project directory to path
 import pathlib
 import sys
@@ -8,9 +8,6 @@ from rdkit import Chem
 from torch_geometric.data import Data, Dataset
 import numpy as np
 from tqdm import tqdm 
-import os 
-sys.path.append('../')
-main_path = pathlib.Path(__file__).parent.parent
 
 class MoleculeDataset(Dataset):
     def __init__(self, root, filename, test=False, transform=None, pre_transform=None):
@@ -39,50 +36,48 @@ class MoleculeDataset(Dataset):
 
     def download(self):
         pass
-    def process_molecule(self,index, mol): 
-        mol_obj = Chem.MolFromSmiles(mol["smiles"]) 
-        if mol_obj is None: 
-            return None 
-        # Get node features 
-        node_feats = self._get_node_features(mol_obj) 
-        # Get edge features 
-        edge_feats = self._get_edge_features(mol_obj) 
-        # Get adjacency info 
-        edge_index = self._get_adjacency_info(mol_obj) 
-        # Get labels info 
-        label = self._get_labels(mol["HIV_active"]) 
-        # Create data object 
-        data = Data(x=node_feats, edge_index=edge_index, edge_attr=edge_feats, y=label, smiles=mol["smiles"] ) 
-        file_name = f'data_test_{index}.pt' if self.test else f'data_{index}.pt' 
-        file_path = os.path.join(self.processed_dir, file_name) 
-        return data, file_path
+    
+
     def process(self):
         self.data = pd.read_csv(self.raw_paths[0])
-        results = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Create a generator with tqdm explicitly wrapping the enumeration
-            future_to_index = {
-                executor.submit(self.process_molecule, idx, mol): idx
-                for idx, mol in self.data.iterrows()
-            }
-        for future in tqdm(concurrent.futures.as_completed(future_to_index), total=len(future_to_index)):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                print(f"Error processing index {future_to_index[future]}: {e}")
+        for index, mol in tqdm(self.data.iterrows(), total=self.data.shape[0]):
+            mol_obj = Chem.MolFromSmiles(mol["smiles"]) 
+            if mol_obj is None: 
+                continue  # Skip molecules that cannot be parsed
+            # Get node features 
+            node_feats = self._get_node_features(mol_obj) 
+            # Get edge features 
+            edge_feats = self._get_edge_features(mol_obj) 
+            # Get adjacency info 
+            edge_index = self._get_adjacency_info(mol_obj) 
+            # Get labels info 
+            label = self._get_labels(mol["HIV_active"]) 
+            # Create data object 
+            data = Data(
+                x=node_feats, 
+                edge_index=edge_index, 
+                edge_attr=edge_feats, 
+                y=label, 
+                smiles=mol["smiles"]
+            )
+            # Save the processed data
+            file_name = f'data_test_{index}.pt' if self.test else f'data_{index}.pt' 
+            file_path = os.path.join(self.processed_dir, file_name) 
+            torch.save(data, file_path)
 
-        for result in results:
-            if result is not None:
-                data, file_path = result
-                torch.save(data, file_path)
-    def _get_node_features(self, mol):
+    def _get_node_features(self, mol:Chem.Mol) -> torch.tensor:
         """ 
-        This will return a matrix / 2d array of the shape
-        [Number of Nodes, Node Feature size]
+        Parameters
+        ----------
+        mol: Chem.Mol
+            RDKit molecule object
+        
+        Returns
+        -------
+        torch.tensor
+            Node features tensor of shape [Number of nodes, Node Feature size]
         """
         all_node_feats = []
-
         for atom in mol.GetAtoms():
             node_feats = []
             # Feature 1: Atomic number        
@@ -163,10 +158,3 @@ class MoleculeDataset(Dataset):
             data = torch.load(os.path.join(self.processed_dir, 
                                  f'data_{idx}.pt'))   
         return data
-def main():
-    # Create a dataset object
-    dataset = MoleculeDataset(root = main_path/'data/', filename='HIV.csv')
-    return
-    
-if __name__ == '__main__':
-    main()
